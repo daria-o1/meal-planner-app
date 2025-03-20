@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: local
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/var/task
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - DYNAMODB_TABLE=meal-planner-local
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:5174
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  backend-sqlite:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sqlite
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/var/task
+      - sqlite-data:/tmp
+    environment:
+      - DB_BACKEND=sqlite
+      - SQLITE_DB_PATH=/tmp/meal-planner.db
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:5174
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+
+volumes:
+  sqlite-data: 

@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "meal_planner"
+version = "0.0.1"
+description = "A simple meal planning application that allows users to save recipes, plan weekly meals, and generate grocery lists."
+authors = ["Daria <Obrusnikova <daria.obrusnikova@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "meal_planner" }]
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "*"
+pylint = "^3.0.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+default = true
+priority = "default"
+
+[tool.pylint]
+max-line-length = 120
+disable = ["too-few-public-methods"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.pytest.ini_options]
+addopts = "-p pytest_asyncio"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,117 @@
+name: Deploy Meal Planner App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    # Set up Python for backend
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    # Set up Node.js for frontend
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'frontend/package-lock.json'
+    
+    # Install backend dependencies
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install mangum  # For AWS Lambda handler
+    
+    # Install frontend dependencies
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+    
+    # Build frontend
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+        
+    # Update API URL in frontend build
+    - name: Update API URL in frontend
+      run: |
+        # This will be replaced with the actual API URL after deployment
+        echo "VITE_API_URL=${{ secrets.API_URL || 'https://placeholder-api-url.execute-api.us-east-1.amazonaws.com/prod' }}" > frontend/dist/.env
+    
+    # Prepare backend for Lambda
+    - name: Prepare backend for Lambda
+      run: |
+        cd backend
+        # Create Lambda handler wrapper
+        echo '
+from mangum import Mangum
+from main import app
+
+handler = Mangum(app)
+' > lambda_handler.py
+        
+        # Create deployment package
+        pip install --target ./package -r requirements.txt
+        cd package
+        zip -r ../backend-lambda.zip .
+        cd ..
+        zip -g backend-lambda.zip main.py lambda_handler.py models.py schemas.py database.py
+        mv backend-lambda.zip ../
+    
+    # Configure AWS credentials
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+    
+    # Initialize Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init
+    
+    # Apply Terraform changes
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve
+      
+    # Get outputs from Terraform
+    - name: Get Terraform outputs
+      id: terraform
+      run: |
+        cd terraform
+        echo "::set-output name=frontend_url::$(terraform output -raw frontend_website_endpoint)"
+        echo "::set-output name=api_url::$(terraform output -raw api_endpoint)"
+    
+    # Deploy frontend to S3
+    - name: Deploy frontend to S3
+      run: |
+        # Update API URL with actual value
+        sed -i "s|VITE_API_URL=.*|VITE_API_URL=${{ steps.terraform.outputs.api_url }}|" frontend/dist/.env
+        aws s3 sync frontend/dist/ s3://${{ secrets.FRONTEND_BUCKET_NAME || 'meal-planner-frontend' }} --delete
+    
+    # Output deployment URLs
+    - name: Output deployment URLs
+      run: |
+        echo "Frontend deployed to: http://${{ steps.terraform.outputs.frontend_url }}"
+        echo "API deployed to: ${{ steps.terraform.outputs.api_url }}" 

@@ -1,0 +1,18 @@
+FROM public.ecr.aws/lambda/python:3.9
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/var/task:${PYTHONPATH}"
+
+# Copy requirements file
+COPY requirements.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . ${LAMBDA_TASK_ROOT}
+
+# Command to run when container starts in Lambda
+CMD ["main.handler"] 
